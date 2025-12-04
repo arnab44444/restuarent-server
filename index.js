@@ -4,12 +4,74 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 require("dotenv").config();
 
 // middleware
 
 app.use(cors());
 app.use(express.json());
+
+// Initialize Google Generative AI
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+// Test endpoint to verify server is running
+app.get("/api/chatbot/test", (req, res) => {
+  res.json({ message: "Chatbot endpoint is working!" });
+});
+
+// Chatbot endpoint
+app.post("/api/chatbot", async (req, res) => {
+  try {
+    const { message } = req.body;
+
+    if (!message || typeof message !== "string" || message.trim() === "") {
+      return res.status(400).json({ error: "Message is required" });
+    }
+
+    // Initialize the model with Gemini Flash
+    // Using gemini-1.5-flash (stable version)
+    // Alternative models: "gemini-1.5-pro", "gemini-2.0-flash-exp"
+    const model = genAI.getGenerativeModel({
+      model: "gemini-1.5-flash",
+    });
+
+    // System instruction to make the bot food-focused
+    const systemInstruction = `You are a helpful food assistant chatbot for a restaurant management system. Your role is to answer questions related to:
+
+- Food and recipes
+- Menu items and dishes
+- Cooking techniques and methods
+- Food ingredients and nutrition
+- Ordering and restaurant services
+- Food-related tips and recommendations
+- Cuisine types and food cultures
+
+IMPORTANT: 
+- You should provide detailed, helpful answers to all food-related questions.
+- If someone asks anything that is NOT related to food, recipes, menu, ordering, or restaurants, you must respond with exactly this message: "I can only answer food-related questions."
+- Be friendly, informative, and conversational in your responses about food topics.
+- When discussing food, provide as much detail as possible to be helpful.`;
+
+    const chat = model.startChat({
+      systemInstruction: systemInstruction,
+      history: [],
+    });
+
+    // Send the message to Gemini
+    const result = await chat.sendMessage(message);
+    const response = await result.response;
+    const text = response.text();
+
+    res.json({ response: text });
+  } catch (error) {
+    console.error("Chatbot error:", error);
+    res.status(500).json({
+      error: "Failed to get response from chatbot",
+      details: error.message,
+    });
+  }
+});
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.vwcukbn.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
